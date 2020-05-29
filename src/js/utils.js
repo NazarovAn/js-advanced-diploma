@@ -1,15 +1,15 @@
 export function calcTileType(index, boardSize) {
   if (index === 0) {
     return 'top-left';
-  } if (index === 7) {
+  } if (index === boardSize - 1) {
     return 'top-right';
-  } if (index === 56) {
+  } if (index === (boardSize * boardSize) - boardSize) {
     return 'bottom-left';
-  } if (index === 63) {
+  } if (index === boardSize * boardSize - 1) {
     return 'bottom-right';
   } if (index % boardSize === 0) {
     return 'left';
-  } if (index % boardSize === 7) {
+  } if (index % boardSize === boardSize - 1) {
     return 'right';
   } if (index < 7) {
     return 'top';
