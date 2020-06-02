@@ -41,6 +41,22 @@ function checkWalkRange(cell, distance, index) {
   return resultArr.includes(index);
 }
 
+function checkAttackRange(cell, distance, index) {
+  let result = false;
+  for (let i = 0; i <= distance; i += 1) {
+    const fromTop = cell - 8 * i - distance;
+    const toTop = cell - 8 * i + distance;
+    const fromBottom = cell + 8 * i - distance;
+    const toBottom = cell + 8 * i + distance;
+    if (index >= fromTop && index <= toTop) {
+      result = true;
+    } if (index >= fromBottom && index <= toBottom) {
+      result = true;
+    }
+  }
+  return result;
+}
+
 export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
@@ -65,7 +81,7 @@ export default class GameController {
     if (character === null) {
       if (checkWalkRange(selectedCell, selectedCharacter.character.walkDistance, index)) {
         selectedCharacter.position = index;
-        this.selectCell(selectedCell, index);
+        this.selectNewCell(selectedCell, index);
         this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
       } else {
         GamePlay.showError('Персонаж не может попасть на эту клетку');
@@ -73,9 +89,13 @@ export default class GameController {
       return;
     }
     if (character.team !== this.gameState.turn) {
+      if (checkAttackRange(selectedCell, selectedCharacter.character.attackRange, index)) {
+        console.log('attack');
+        return;
+      }
       GamePlay.showError(`Ход команды ${this.gameState.turn}`);
     } else {
-      this.selectCell(selectedCell, index);
+      this.selectNewCell(selectedCell, index);
       this.gameState.selectedCharacter = character;
     }
   }
@@ -92,7 +112,7 @@ export default class GameController {
     this.gamePlay.hideCellTooltip(index);
   }
 
-  selectCell(cell, index) {
+  selectNewCell(cell, index) {
     if (cell !== undefined) {
       this.gamePlay.deselectCell(cell);
     }
