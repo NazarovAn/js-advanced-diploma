@@ -41,16 +41,20 @@ function checkWalkRange(cell, distance, index) {
   return resultArr.includes(index);
 }
 
-function checkAttackRange(cell, distance, index) {
+function checkAttackRange(selected, attackDistance, attackIndex) {
+  const testArray = [8, 16, 24, 32, 40, 48, 56, 64];
+  const attackLineIndex = testArray.findIndex((item) => item > attackIndex);
+  const selectedLineIndex = testArray.findIndex((item) => item > selected);
+  const columnsDistance = (attackIndex % 8) - (selected % 8);
+  let rowsDistance;
   let result = false;
-  for (let i = 0; i <= distance; i += 1) {
-    const fromTop = cell - 8 * i - distance;
-    const toTop = cell - 8 * i + distance;
-    const fromBottom = cell + 8 * i - distance;
-    const toBottom = cell + 8 * i + distance;
-    if (index >= fromTop && index <= toTop) {
-      result = true;
-    } if (index >= fromBottom && index <= toBottom) {
+  if (attackLineIndex >= selectedLineIndex) {
+    rowsDistance = attackLineIndex - selectedLineIndex;
+  } else {
+    rowsDistance = selectedLineIndex - attackLineIndex;
+  }
+  if (columnsDistance <= attackDistance) {
+    if (rowsDistance <= attackDistance) {
       result = true;
     }
   }
