@@ -30,6 +30,17 @@ function findCharacterOnCell(teamA, teamB, index) {
   return null;
 }
 
+function checkWalkRange(cell, distance, index) {
+  const testArr = [-9, -8, -7, -1, 1, 7, 8, 9];
+  const resultArr = [];
+  for (let i = 1; i <= distance; i += 1) {
+    testArr.forEach((item) => {
+      resultArr.push(cell - item * i);
+    });
+  }
+  return resultArr.includes(index);
+}
+
 export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
@@ -49,15 +60,23 @@ export default class GameController {
 
   onCellClick(index) {
     const character = findCharacterOnCell(this.playerTeam, this.computerTeam, index);
+    const { selectedCharacter } = this.gameState;
+    const { selectedCell } = this.gameState;
+    if (character === null) {
+      if (checkWalkRange(selectedCell, selectedCharacter.character.walkDistance, index)) {
+        selectedCharacter.position = index;
+        this.selectCell(selectedCell, index);
+        this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+      } else {
+        GamePlay.showError('Персонаж не может попасть на эту клетку');
+      }
+      return;
+    }
     if (character.team !== this.gameState.turn) {
       GamePlay.showError(`Ход команды ${this.gameState.turn}`);
     } else {
-      const { selectedCell } = this.gameState;
-      if (selectedCell !== undefined) {
-        this.gamePlay.deselectCell(selectedCell);
-      }
-      this.gamePlay.selectCell(index);
-      this.gameState.selectedCell = index;
+      this.selectCell(selectedCell, index);
+      this.gameState.selectedCharacter = character;
     }
   }
 
@@ -71,5 +90,13 @@ export default class GameController {
 
   onCellLeave(index) {
     this.gamePlay.hideCellTooltip(index);
+  }
+
+  selectCell(cell, index) {
+    if (cell !== undefined) {
+      this.gamePlay.deselectCell(cell);
+    }
+    this.gamePlay.selectCell(index);
+    this.gameState.selectedCell = index;
   }
 }
