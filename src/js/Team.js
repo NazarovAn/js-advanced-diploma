@@ -5,6 +5,7 @@ import Magician from './characters/Magician';
 import Daemon from './characters/Daemon';
 import Undead from './characters/Undead';
 import Vampire from './characters/Vampire';
+import { PositionedCharacter } from './PositionedCharacter';
 
 const playerCharactersTypes = new Set([
   Bowman,
@@ -46,9 +47,12 @@ export default class Team {
     } else {
       this.members = generateTeam(computerCharactersTypes, maxLevel, charactersCount);
     }
-    if (charactersCount > 10) {
-      throw new Error('Team size must be less than 10');
+    if (charactersCount > 15) {
+      throw new Error('Team size must be less than 15');
     }
     this.startingPositions = getPlayerPositions(teamType, charactersCount);
+    // eslint-disable-next-line max-len
+    this.members = this.members.map((char, index) => new PositionedCharacter(char, this.startingPositions[index]));
+    delete this.startingPositions;
   }
 }

@@ -16,16 +16,14 @@ export class PositionedCharacter {
 }
 
 export function getPositionedCharacters(teamA, teamB) {
-  const positionsA = teamA.startingPositions;
   const charactersA = teamA.members;
-  const positionsB = teamB.startingPositions;
   const charactersB = teamB.members;
   const result = [];
-  charactersA.forEach((item, index) => {
-    result.push(new PositionedCharacter(item, positionsA[index]));
+  charactersA.forEach((item) => {
+    result.push(new PositionedCharacter(item.character, item.position));
   });
-  charactersB.forEach((item, index) => {
-    result.push(new PositionedCharacter(item, positionsB[index]));
+  charactersB.forEach((item) => {
+    result.push(new PositionedCharacter(item.character, item.position));
   });
   return result;
 }
