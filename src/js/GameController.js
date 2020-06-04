@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import Team from './Team';
 import { getPositionedCharacters } from './PositionedCharacter';
 import GameState from './GameState';
@@ -23,43 +24,85 @@ export default class GameController {
 
   onCellClick(index) {
     const character = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
-    const { selectedCharacter } = this.gameState;
     const { selectedCell } = this.gameState;
-    let walkDistance;
-    let attackRange;
-    if (selectedCharacter !== undefined) {
-      walkDistance = selectedCharacter.character.walkDistance;
-      attackRange = selectedCharacter.character.attackRange;
+    let selectedCharacter;
+    // Есть ли в памяти выбранный персонаж?
+    if (this.gameState.selectedCharacter !== undefined && this.gameState.selectedCharacter !== null) {
+      selectedCharacter = this.gameState.selectedCharacter;
     }
 
-    // Передвижение
-    if (character === null) {
-      if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
-        selectedCharacter.position = index;
-        this.selectNewCell(selectedCell, index);
-        this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+    // Персонаж еще не выбран
+    if (selectedCharacter === undefined || selectedCharacter === null) {
+      // В выбранной клетке кто-то есть
+      if (character !== undefined && character !== null) {
+        // Ход команды этого персонажа?
+        if (character.team === this.gameState.turn) {
+          // Может он ходить или атаковать?
+          if (character.canWalk === false && character.canAttack === false) {
+            GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
+            return;
+          }
+          // Новый персонаж выбран и записан в память
+          this.selectNewCell(selectedCell, index);
+          this.gameState.selectedCharacter = character;
+          selectedCharacter = character;
+        } else {
+          GamePlay.showMessage(`Ход команды ${this.gameState.turn}`);
+          return;
+        }
       } else {
-        GamePlay.showError('Персонаж не может попасть на эту клетку');
+        return;
+      }
+    }
+
+    // Персонаж выбран
+
+    // Если персонаж стрелял и ходил - закончить ход.
+    if (selectedCharacter.canWalk === false && selectedCharacter.canAttack === false) {
+      GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
+      this.gameState.selectedCharacter = null;
+      return;
+    }
+
+    const { walkDistance } = selectedCharacter.character;
+    const { attackRange } = selectedCharacter.character;
+    // В выбранной клетке пусто
+    if (character === null) {
+      // Выбранный персонаж может передвигаться?
+      if (selectedCharacter.canWalk !== false) {
+        // Он может попасть на эту клетку?
+        if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
+          selectedCharacter.position = index;
+          this.selectNewCell(selectedCell, index);
+          this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+          this.gameState.selectedCharacter.canWalk = false;
+          this.characterIsActive(selectedCharacter);
+        } else {
+          GamePlay.showError('Персонаж не может попасть на эту клетку');
+        }
       }
       return;
     }
 
-    // Атака
-    if (character.team !== this.gameState.turn) {
-      if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
-        console.log('attack');
-        return;
+    // В выбранной клетке кто-то есть
+    if (character !== null) {
+      // Ход команды этого персонажа?
+      if (character.team === this.gameState.turn) {
+        this.selectNewCell(selectedCell, index);
+        this.gameState.selectedCharacter = character;
+      // Персонаж может атаковать?
+      } else if (character.canAttack !== false) {
+        // Он может попасть в противника?
+        if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
+          console.log('attack');
+          this.gameState.selectedCharacter.canAttack = false;
+          this.characterIsActive(selectedCharacter);
+          return;
+        }
+        GamePlay.showError('Не попал - цель слишком далеко');
+        this.gameState.selectedCharacter.canAttack = false;
+        this.characterIsActive(selectedCharacter);
       }
-      GamePlay.showError(`Ход команды ${this.gameState.turn}`);
-    } else {
-      this.selectNewCell(selectedCell, index);
-      this.gameState.selectedCharacter = character;
-    }
-
-    // Отмена выбора персонажа
-    if (character === selectedCharacter) {
-      this.gamePlay.deselectCell(index);
-      this.gameState.selectedCharacter = null;
     }
   }
 
@@ -68,12 +111,7 @@ export default class GameController {
     const { selectedCharacter } = this.gameState;
     const { selectedCell } = this.gameState;
     const { tolltipCell } = this.gameState;
-    let walkDistance;
-    let attackRange;
-    if (selectedCharacter !== undefined) {
-      walkDistance = selectedCharacter.character.walkDistance;
-      attackRange = selectedCharacter.character.attackRange;
-    }
+    this.gamePlay.setCursor(cursors.auto);
 
     // Отображение информации о персонаже
     if (character !== null) {
@@ -81,29 +119,43 @@ export default class GameController {
       this.gamePlay.showCellTooltip(tooltipString, index);
     }
 
-    // Изменение курсора
-    if (selectedCharacter !== undefined || selectedCharacter === null) {
+    // Если есть выбранный персонаж
+    if (selectedCharacter !== undefined && selectedCharacter !== null) {
+      const { walkDistance } = selectedCharacter.character;
+      const { attackRange } = selectedCharacter.character;
+
+      // Клетка пустая
       if (character === null) {
-        this.gamePlay.setCursor(cursors.auto);
         // Подсветка допустимых для перехода клеток
-        if (GameController.checkCircleRange(selectedCell, walkDistance, index)) {
-          if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
-            this.selectNewCell(tolltipCell, index, 'green');
+        if (selectedCharacter.canWalk !== false) {
+        // Проверка максимальной дальности передвижения
+          if (GameController.checkCircleRange(selectedCell, walkDistance, index)) {
+          // Проверка по линиям
+            if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
+              this.selectNewCell(tolltipCell, index, 'green');
+            } else {
+              this.gamePlay.setCursor(cursors.notallowed);
+              this.gamePlay.deselectCell(tolltipCell);
+            }
           } else {
             this.gamePlay.setCursor(cursors.notallowed);
             this.gamePlay.deselectCell(tolltipCell);
           }
-        } else {
-          this.gamePlay.setCursor(cursors.notallowed);
+          return;
         }
-        return;
-      } if (character !== null) {
+        this.gamePlay.setCursor(cursors.notallowed);
+      }
+
+      // Клетка не пустая
+      if (character !== null) {
+        // Персонаж противника
         if (character.team !== this.gameState.turn
           && GameController.checkCircleRange(selectedCell, attackRange, index)) {
           this.gamePlay.setCursor(cursors.crosshair);
           this.selectNewCell(selectedCell, index, 'red');
           this.gamePlay.deselectCell(tolltipCell);
           return;
+        // Персонаж в одной команде
         } if (character.team === this.gameState.turn) {
           this.gamePlay.setCursor(cursors.pointer);
         } else {
@@ -118,7 +170,7 @@ export default class GameController {
   }
 
   selectNewCell(cell, index, color) {
-    if (cell !== undefined) {
+    if (cell !== undefined && cell !== null) {
       this.gamePlay.deselectCell(cell);
     }
     if (color !== undefined) {
@@ -128,6 +180,14 @@ export default class GameController {
     }
     this.gamePlay.selectCell(index);
     this.gameState.selectedCell = index;
+  }
+
+  characterIsActive(char) {
+    if (char.canAttack === false && char.canWalk === false) {
+      this.gameState.selectedCharacter = null;
+      return false;
+    }
+    return true;
   }
 
   static getTooltipString(obj) {
