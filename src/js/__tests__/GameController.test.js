@@ -1,4 +1,4 @@
-import { getTooltipString } from '../GameController';
+import GameController from '../GameController';
 
 describe('tagged templates', () => test.each([
   ['1', {
@@ -22,6 +22,9 @@ describe('tagged templates', () => test.each([
 ])(
   ('%s'),
   (level, object, expected) => {
-    expect(getTooltipString(object)).toEqual(expected);
+    expect(GameController.getTooltipString(object)).toEqual(expected);
   },
 ));
+
+
+// Нужен тест на пункт №10 - Визуальный отклик

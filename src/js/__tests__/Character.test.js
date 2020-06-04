@@ -8,9 +8,11 @@ test('new Character error', () => {
 test('new Daemon', () => {
   expect(new Daemon(10)).toEqual({
     attack: 10,
+    attackRange: 4,
     defence: 40,
     health: 50,
     level: 10,
     type: 'daemon',
+    walkDistance: 1,
   });
 });
