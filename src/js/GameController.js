@@ -61,6 +61,7 @@ export default class GameController {
     if (selectedCharacter.canWalk === false && selectedCharacter.canAttack === false) {
       GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
       this.gameState.selectedCharacter = null;
+      this.checkTurns();
       return;
     }
 
@@ -81,6 +82,7 @@ export default class GameController {
           GamePlay.showError('Персонаж не может попасть на эту клетку');
         }
       }
+      this.checkTurns();
       return;
     }
 
@@ -90,12 +92,16 @@ export default class GameController {
       if (character.team === this.gameState.turn) {
         this.selectNewCell(selectedCell, index);
         this.gameState.selectedCharacter = character;
+        return;
+      }
       // Персонаж может атаковать?
-      } else if (character.canAttack !== false) {
+      if (selectedCharacter.canAttack !== false) {
         // Он может попасть в противника?
         if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
           console.log('attack');
+
           this.gameState.selectedCharacter.canAttack = false;
+          this.checkTurns();
           this.characterIsActive(selectedCharacter);
           return;
         }
@@ -104,6 +110,7 @@ export default class GameController {
         this.characterIsActive(selectedCharacter);
       }
     }
+    this.checkTurns();
   }
 
   onCellEnter(index) {
@@ -148,17 +155,21 @@ export default class GameController {
 
       // Клетка не пустая
       if (character !== null) {
-        // Персонаж противника
-        if (character.team !== this.gameState.turn
-          && GameController.checkCircleRange(selectedCell, attackRange, index)) {
-          this.gamePlay.setCursor(cursors.crosshair);
-          this.selectNewCell(selectedCell, index, 'red');
-          this.gamePlay.deselectCell(tolltipCell);
-          return;
-        // Персонаж в одной команде
-        } if (character.team === this.gameState.turn) {
+        // Персонажи в одной команде
+        if (character.team === this.gameState.turn) {
           this.gamePlay.setCursor(cursors.pointer);
-        } else {
+          return;
+        }
+        // Персонаж противника
+        if (character.team !== this.gameState.turn) {
+          if (selectedCharacter.canAttack !== false) {
+            if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
+              this.gamePlay.setCursor(cursors.crosshair);
+              this.selectNewCell(selectedCell, index, 'red');
+              this.gamePlay.deselectCell(tolltipCell);
+              return;
+            }
+          }
           this.gamePlay.setCursor(cursors.notallowed);
         }
       }
@@ -188,6 +199,25 @@ export default class GameController {
       return false;
     }
     return true;
+  }
+
+  checkTurns() {
+    if (this.playerTeam.members.every((char) => char.canAttack === false)
+      && this.playerTeam.members.every((char) => char.canWalk === false)) {
+      this.gameState.turn = this.computerTeam.type;
+      this.playerTeam.members.forEach((item) => item.canAttack = true);
+      this.playerTeam.members.forEach((item) => item.canWalk = true);
+      alert('Ход второй команды');
+      return;
+    }
+
+    if (this.computerTeam.members.every((char) => char.canAttack === false)
+      && this.computerTeam.members.every((char) => char.canWalk === false)) {
+      this.gameState.turn = this.playerTeam.type;
+      this.computerTeam.members.forEach((item) => item.canAttack = true);
+      this.computerTeam.members.forEach((item) => item.canWalk = true);
+      alert('Ходит игрок');
+    }
   }
 
   static getTooltipString(obj) {
@@ -228,11 +258,18 @@ export default class GameController {
     return resultArr.includes(index);
   }
 
-  static checkCircleRange(selected, circleDistance, int) {
+  static checkCircleRange(selected, allowedDistance, int) {
     const testArray = [8, 16, 24, 32, 40, 48, 56, 64];
     const lineIndex = testArray.findIndex((item) => item > int);
     const selectedLineIndex = testArray.findIndex((item) => item > selected);
-    const columnsDistance = (int % 8) - (selected % 8);
+
+    let columnsDistance;
+    if ((int % 8) > (selected % 8)) {
+      columnsDistance = (int % 8) - (selected % 8);
+    } else {
+      columnsDistance = (selected % 8) - (int % 8);
+    }
+
     let rowsDistance;
     let result = false;
     if (lineIndex >= selectedLineIndex) {
@@ -240,8 +277,9 @@ export default class GameController {
     } else {
       rowsDistance = selectedLineIndex - lineIndex;
     }
-    if (columnsDistance <= circleDistance) {
-      if (rowsDistance <= circleDistance) {
+
+    if (columnsDistance <= allowedDistance) {
+      if (rowsDistance <= allowedDistance) {
         result = true;
       }
     }
