@@ -8,7 +8,7 @@ export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
     this.stateService = stateService;
-    this.playerTeam = new Team('Player', 1, 2);
+    this.playerTeam = new Team('Player', 1, 5);
     this.computerTeam = new Team('Computer', 1, 5);
     this.turn = 'Player';
     this.singlePlayer = true;
@@ -88,8 +88,6 @@ export default class GameController {
         if (GameController.checkCircleRange(this.selectedCell, attackRange, index)) {
           // Атака
           this.attack(this.selectedCharacter, this.targetCellCharacter, index);
-
-          this.selectedCharacter.canAttack = false;
           this.characterIsActive(this.selectedCharacter);
           this.checkTurns();
           return;
@@ -228,6 +226,8 @@ export default class GameController {
           this.removeCharacterFromTeam(attacked);
         }
       } finally {
+        const aggressor = attacker;
+        aggressor.canAttack = false;
         this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
       }
     })();
@@ -243,12 +243,11 @@ export default class GameController {
         teamMember.canAttack = true;
         teamMember.canWalk = true;
       });
-      alert('Ход второй команды');
+      GamePlay.showMessage('Ход второй команды');
     }
 
     // Если идет игра против компьютера
-    if (this.singlePlayer === true && this.turn === this.computerTeam.type) {
-      console.log('computerResponse');
+    if (this.singlePlayer === true && this.turn !== 'Player') {
       this.computerResponse();
       return;
     }
@@ -262,29 +261,49 @@ export default class GameController {
         teamMember.canAttack = true;
         teamMember.canWalk = true;
       });
-      alert('Ходит игрок');
+      GamePlay.showMessage('Ходит игрок');
     }
   }
 
-  computerResponse() {
-    const playerTeam = this.playerTeam.members;
+  async computerResponse() {
     const computerTeam = this.computerTeam.members;
-    const playerTeamPositions = new Array(playerTeam.length).fill(0).map((item, i) => playerTeam[i].position);
-    computerTeam.forEach((char) => {
-      console.log(char);
+    for (let i = 0; i < computerTeam.length; i += 1) {
+      this.computerTeamAttack(computerTeam[i]);
+      // eslint-disable-next-line no-await-in-loop
+      await GameController.waitForComputer(1000);
+    }
+  }
 
-      const { position } = char;
-      const { attackRange } = char.character;
-      playerTeamPositions.forEach((pos, i) => {
-        const targetPosition = pos;
-        if (GameController.checkCircleRange(position, attackRange, targetPosition)) {
-          console.log(GameController.checkCircleRange(char, char.character.attackRange, pos));
-          console.log(playerTeam[i]);
+  static waitForComputer(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
-          this.attack(char, playerTeam[i], pos);
-        }
-      });
+  /**
+   * Attacking character with less defence value
+   *
+   * @param  attacker
+   */
+  computerTeamAttack(attacker) {
+    const { position } = attacker;
+    const { attackRange } = attacker.character;
+    const targetsArr = this.playerTeam.members.filter((member) => {
+      if (GameController.checkCircleRange(position, attackRange, member.position)) {
+        return member;
+      }
+      return false;
     });
+
+    if (targetsArr.length === 1) {
+      this.attack(attacker, targetsArr[0], targetsArr[0].position);
+      return true;
+    }
+
+    if (targetsArr.length > 1) {
+      const target = targetsArr.reduce((a, b) => ((a.character.defence > b.character.defence) ? a : b));
+      this.attack(attacker, target, target.position);
+      return true;
+    }
+    return false;
   }
 
   removeCharacterFromTeam(obj) {
