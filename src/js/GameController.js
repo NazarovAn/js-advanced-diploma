@@ -1,7 +1,6 @@
 /* eslint-disable max-len */
 import Team from './Team';
 import { getPositionedCharacters } from './PositionedCharacter';
-// import GameState from './GameState';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
 
@@ -11,11 +10,11 @@ export default class GameController {
     this.stateService = stateService;
     this.playerTeam = new Team('Player', 1, 2);
     this.computerTeam = new Team('Computer', 1, 5);
-    // this.gameState = new GameState();
-    this.selectedCharacter = null;
-    this.selectCell = null;
     this.turn = 'Player';
     this.singlePlayer = true;
+    this.targetCellCharacter = null;
+    this.selectedCharacter = null;
+    this.selectedCell = null;
     this.tolltipCell = null;
   }
 
@@ -28,36 +27,25 @@ export default class GameController {
   }
 
   onCellClick(index) {
-    const onCellCharacter = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
-    if (this.selectedCharacter !== null) {
-      // Если персонаж стрелял и ходил - закончить ход.
-      if (this.selectedCharacter.canWalk === false && this.selectedCharacter.canAttack === false) {
-        GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
-        this.checkTurns();
-        this.selectedCharacter = null;
-        return;
-      }
-    }
+    this.targetCellCharacter = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
 
     // Персонаж еще не выбран
     if (this.selectedCharacter === null) {
       // В выбранной клетке кто-то есть
-      if (onCellCharacter !== undefined && onCellCharacter !== null) {
+      if (this.targetCellCharacter !== null) {
         // Ход команды этого персонажа?
-        if (onCellCharacter.team === this.turn) {
+        if (this.targetCellCharacter.team === this.turn) {
           // Может он ходить или атаковать?
-          if (onCellCharacter.canWalk === false && onCellCharacter.canAttack === false) {
+          if (!this.characterIsActive(this.targetCellCharacter)) {
             GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
             return;
           }
           // Новый персонаж выбран и записан
           this.selectNewCell(this.selectedCell, index);
-          this.selectedCharacter = onCellCharacter;
-        } else {
-          GamePlay.showMessage(`Ход команды ${this.turn}`);
-          return;
+          this.selectedCharacter = this.targetCellCharacter;
         }
       } else {
+        GamePlay.showMessage('В выбранной клетке пусто');
         return;
       }
     }
@@ -65,10 +53,12 @@ export default class GameController {
     // Персонаж выбран
     const { walkDistance } = this.selectedCharacter.character;
     const { attackRange } = this.selectedCharacter.character;
+    const selectedCharacterCanWalk = this.selectedCharacter.canWalk;
+    const selectedCharacterCanAttack = this.selectedCharacter.canAttack;
     // В выбранной клетке пусто
-    if (onCellCharacter === null) {
+    if (this.targetCellCharacter === null) {
       // Выбранный персонаж может передвигаться?
-      if (this.selectedCharacter.canWalk !== false) {
+      if (selectedCharacterCanWalk !== false) {
         // Он может попасть на эту клетку?
         if (GameController.checkWalkRange(this.selectedCell, walkDistance, index)) {
           this.selectedCharacter.position = index;
@@ -76,49 +66,49 @@ export default class GameController {
           this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
           this.selectedCharacter.canWalk = false;
           this.characterIsActive(this.selectedCharacter);
+          this.checkTurns();
         } else {
           GamePlay.showError('Персонаж не может попасть на эту клетку');
         }
       }
-      this.checkTurns();
       return;
     }
 
     // В выбранной клетке кто-то есть
-    if (onCellCharacter !== null) {
+    if (this.targetCellCharacter !== null) {
       // Ход команды этого персонажа?
-      if (onCellCharacter.team === this.turn) {
+      if (this.targetCellCharacter.team === this.turn) {
         this.selectNewCell(this.selectedCell, index);
-        this.selectedCharacter = onCellCharacter;
+        this.selectedCharacter = this.targetCellCharacter;
         return;
       }
       // Персонаж может атаковать?
-      if (this.selectedCharacter.canAttack !== false) {
+      if (selectedCharacterCanAttack !== false) {
         // Он может попасть в противника?
         if (GameController.checkCircleRange(this.selectedCell, attackRange, index)) {
           // Атака
-          this.attack(this.selectedCharacter, onCellCharacter, index);
+          this.attack(this.selectedCharacter, this.targetCellCharacter, index);
 
           this.selectedCharacter.canAttack = false;
-          this.checkTurns();
           this.characterIsActive(this.selectedCharacter);
+          this.checkTurns();
           return;
         }
         GamePlay.showError('Не попал - цель слишком далеко');
         this.selectedCharacter.canAttack = false;
         this.characterIsActive(this.selectedCharacter);
+        this.checkTurns();
       }
     }
-    this.checkTurns();
   }
 
   onCellEnter(index) {
-    const character = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
+    this.targetCellCharacter = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
     this.gamePlay.setCursor(cursors.auto);
 
     // Отображение информации о персонаже
-    if (character !== null) {
-      const tooltipString = GameController.getTooltipString(character);
+    if (this.targetCellCharacter !== null) {
+      const tooltipString = GameController.getTooltipString(this.targetCellCharacter);
       this.gamePlay.showCellTooltip(tooltipString, index);
     }
 
@@ -126,43 +116,41 @@ export default class GameController {
     if (this.selectedCharacter !== null) {
       const { walkDistance } = this.selectedCharacter.character;
       const { attackRange } = this.selectedCharacter.character;
+      const { position } = this.selectedCharacter;
+      const { canWalk } = this.selectedCharacter;
+      const { canAttack } = this.selectedCharacter;
+      const allowedWalkDistance = GameController.checkWalkRange(position, walkDistance, index);
+      const allowedAttackRange = GameController.checkCircleRange(position, attackRange, index);
 
       // Клетка пустая
-      if (character === null) {
-        // Подсветка допустимых для перехода клеток
-        if (this.selectedCharacter.canWalk !== false) {
+      // Подсветка допустимых для перехода клеток
+      if (this.targetCellCharacter === null && canWalk !== false) {
         // Проверка максимальной дальности передвижения
-          if (GameController.checkCircleRange(this.selectedCell, walkDistance, index)) {
+        if (GameController.checkCircleRange(position, walkDistance, index)) {
           // Проверка по линиям
-            if (GameController.checkWalkRange(this.selectedCell, walkDistance, index)) {
-              this.selectNewCell(this.tolltipCell, index, 'green');
-            } else {
-              this.gamePlay.setCursor(cursors.notallowed);
-              this.gamePlay.deselectCell(this.tolltipCell);
-            }
-          } else {
-            this.gamePlay.setCursor(cursors.notallowed);
-            this.gamePlay.deselectCell(this.tolltipCell);
+          if (allowedWalkDistance) {
+            this.selectNewCell(this.tolltipCell, index, 'green');
+            return;
           }
-          return;
         }
-        this.gamePlay.setCursor(cursors.notallowed);
+        this.setNotallowedCell();
+      } else {
+        this.setNotallowedCell();
       }
 
       // Клетка не пустая
-      if (character !== null) {
+      if (this.targetCellCharacter !== null) {
         // Персонажи в одной команде
-        if (character.team === this.turn) {
+        if (this.targetCellCharacter.team === this.turn) {
           this.gamePlay.setCursor(cursors.pointer);
           return;
         }
         // Персонаж противника
-        if (character.team !== this.turn) {
-          if (this.selectedCharacter.canAttack !== false) {
-            if (GameController.checkCircleRange(this.selectedCell, attackRange, index)) {
+        if (this.targetCellCharacter.team !== this.turn) {
+          if (canAttack !== false) {
+            if (allowedAttackRange) {
               this.gamePlay.setCursor(cursors.crosshair);
-              this.selectNewCell(this.selectedCell, index, 'red');
-              this.gamePlay.deselectCell(this.tolltipCell);
+              this.selectNewCell(position, index, 'red');
               return;
             }
           }
@@ -174,8 +162,18 @@ export default class GameController {
 
   onCellLeave(index) {
     this.gamePlay.hideCellTooltip(index);
+    if (this.tolltipCell !== null) {
+      this.gamePlay.deselectCell(this.tolltipCell);
+    }
   }
 
+  /**
+   * Removes selection from ol
+   *
+   * @param {number} cell - index of cell to deselect.
+   * @param {number} index - index of new cell to select.
+   * @param {string} color - color of new cell.
+   */
   selectNewCell(cell, index, color) {
     if (cell !== undefined && cell !== null) {
       this.gamePlay.deselectCell(cell);
@@ -189,20 +187,34 @@ export default class GameController {
     this.selectedCell = index;
   }
 
+  setNotallowedCell() {
+    this.gamePlay.setCursor(cursors.notallowed);
+    this.gamePlay.deselectCell(this.tolltipCell);
+  }
+
   /**
-   * Returns false if character can walk or attack.
-   * Removes selection from character if character can't walk and attack
+   * Returns false if character can't walk or attack.
+   * Removes selection from character if character can't walk and attack.
    *
    * @param char
    */
   characterIsActive(char) {
-    if (char.canAttack === false && char.canWalk === false) {
-      this.selectedCharacter = null;
-      return false;
+    if (char.canAttack !== false || char.canWalk !== false) {
+      return true;
     }
-    return true;
+    this.gamePlay.deselectCell(this.selectedCharacter.position);
+    this.selectedCharacter = null;
+    return false;
   }
 
+  /**
+   * Calculates attack value, removes character from board if target health <= 0
+   * and redraws caracters on field.
+   *
+   * @param attacker
+   * @param target
+   * @param attackIndex - index of target cell
+   */
   attack(attacker, target, attackIndex) {
     (async () => {
       try {
@@ -213,8 +225,6 @@ export default class GameController {
         await this.gamePlay.showDamage(attackIndex, attackResult);
         attacked.character.health -= attackResult;
         if (attacked.character.health <= 0) {
-          console.log(attacked.character.health);
-
           this.removeCharacterFromTeam(attacked);
         }
       } finally {
@@ -262,7 +272,7 @@ export default class GameController {
     const playerTeamPositions = new Array(playerTeam.length).fill(0).map((item, i) => playerTeam[i].position);
     computerTeam.forEach((char) => {
       console.log(char);
-      
+
       const { position } = char;
       const { attackRange } = char.character;
       playerTeamPositions.forEach((pos, i) => {
@@ -300,6 +310,13 @@ export default class GameController {
     return `${icons.level}${level} ${icons.attack}${attack} ${icons.defence}${defence} ${icons.health}${health}`;
   }
 
+  /**
+   * Finds and returns character on cell, else returns null.
+   *
+   * @param teamA
+   * @param teamB
+   * @param index - index of target cell.
+   */
   static findCharacterOnCell(teamA, teamB, index) {
     const aChar = teamA.members.find((char) => char.position === index);
     if (aChar !== undefined) {
