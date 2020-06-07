@@ -98,7 +98,21 @@ export default class GameController {
       if (selectedCharacter.canAttack !== false) {
         // Он может попасть в противника?
         if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
-          console.log('attack');
+          // Атака
+          (async () => {
+            try {
+              const attackValue = selectedCharacter.character.attack;
+              const targetDefence = character.character.defence;
+              const attackResult = Math.max(attackValue - targetDefence, attackValue * 0.1);
+              await this.gamePlay.showDamage(index, attackResult);
+              character.character.health -= attackResult;
+              if (character.character.health <= 0) {
+                this.removeCharacterFromTeam(character);
+              }
+            } finally {
+              this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+            }
+          })();
 
           this.gameState.selectedCharacter.canAttack = false;
           this.checkTurns();
@@ -218,6 +232,11 @@ export default class GameController {
       this.computerTeam.members.forEach((item) => item.canWalk = true);
       alert('Ходит игрок');
     }
+  }
+
+  removeCharacterFromTeam(obj) {
+    const removeIndex = this.computerTeam.members.indexOf(obj);
+    this.computerTeam.members.splice(removeIndex, 1);
   }
 
   static getTooltipString(obj) {
