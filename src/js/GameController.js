@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 import Team from './Team';
 import { getPositionedCharacters } from './PositionedCharacter';
-import GameState from './GameState';
+// import GameState from './GameState';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
 
@@ -9,9 +9,14 @@ export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
     this.stateService = stateService;
-    this.playerTeam = new Team('Player', 4, 4);
-    this.computerTeam = new Team('Computer', 3, 3);
-    this.gameState = new GameState();
+    this.playerTeam = new Team('Player', 1, 2);
+    this.computerTeam = new Team('Computer', 1, 5);
+    // this.gameState = new GameState();
+    this.selectedCharacter = null;
+    this.selectCell = null;
+    this.turn = 'Player';
+    this.singlePlayer = true;
+    this.tolltipCell = null;
   }
 
   init() {
@@ -23,31 +28,33 @@ export default class GameController {
   }
 
   onCellClick(index) {
-    const character = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
-    const { selectedCell } = this.gameState;
-    let selectedCharacter;
-    // Есть ли в памяти выбранный персонаж?
-    if (this.gameState.selectedCharacter !== undefined && this.gameState.selectedCharacter !== null) {
-      selectedCharacter = this.gameState.selectedCharacter;
+    const onCellCharacter = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
+    if (this.selectedCharacter !== null) {
+      // Если персонаж стрелял и ходил - закончить ход.
+      if (this.selectedCharacter.canWalk === false && this.selectedCharacter.canAttack === false) {
+        GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
+        this.checkTurns();
+        this.selectedCharacter = null;
+        return;
+      }
     }
 
     // Персонаж еще не выбран
-    if (selectedCharacter === undefined || selectedCharacter === null) {
+    if (this.selectedCharacter === null) {
       // В выбранной клетке кто-то есть
-      if (character !== undefined && character !== null) {
+      if (onCellCharacter !== undefined && onCellCharacter !== null) {
         // Ход команды этого персонажа?
-        if (character.team === this.gameState.turn) {
+        if (onCellCharacter.team === this.turn) {
           // Может он ходить или атаковать?
-          if (character.canWalk === false && character.canAttack === false) {
+          if (onCellCharacter.canWalk === false && onCellCharacter.canAttack === false) {
             GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
             return;
           }
-          // Новый персонаж выбран и записан в память
-          this.selectNewCell(selectedCell, index);
-          this.gameState.selectedCharacter = character;
-          selectedCharacter = character;
+          // Новый персонаж выбран и записан
+          this.selectNewCell(this.selectedCell, index);
+          this.selectedCharacter = onCellCharacter;
         } else {
-          GamePlay.showMessage(`Ход команды ${this.gameState.turn}`);
+          GamePlay.showMessage(`Ход команды ${this.turn}`);
           return;
         }
       } else {
@@ -56,28 +63,19 @@ export default class GameController {
     }
 
     // Персонаж выбран
-
-    // Если персонаж стрелял и ходил - закончить ход.
-    if (selectedCharacter.canWalk === false && selectedCharacter.canAttack === false) {
-      GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
-      this.gameState.selectedCharacter = null;
-      this.checkTurns();
-      return;
-    }
-
-    const { walkDistance } = selectedCharacter.character;
-    const { attackRange } = selectedCharacter.character;
+    const { walkDistance } = this.selectedCharacter.character;
+    const { attackRange } = this.selectedCharacter.character;
     // В выбранной клетке пусто
-    if (character === null) {
+    if (onCellCharacter === null) {
       // Выбранный персонаж может передвигаться?
-      if (selectedCharacter.canWalk !== false) {
+      if (this.selectedCharacter.canWalk !== false) {
         // Он может попасть на эту клетку?
-        if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
-          selectedCharacter.position = index;
-          this.selectNewCell(selectedCell, index);
+        if (GameController.checkWalkRange(this.selectedCell, walkDistance, index)) {
+          this.selectedCharacter.position = index;
+          this.selectNewCell(this.selectedCell, index);
           this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
-          this.gameState.selectedCharacter.canWalk = false;
-          this.characterIsActive(selectedCharacter);
+          this.selectedCharacter.canWalk = false;
+          this.characterIsActive(this.selectedCharacter);
         } else {
           GamePlay.showError('Персонаж не может попасть на эту клетку');
         }
@@ -87,41 +85,28 @@ export default class GameController {
     }
 
     // В выбранной клетке кто-то есть
-    if (character !== null) {
+    if (onCellCharacter !== null) {
       // Ход команды этого персонажа?
-      if (character.team === this.gameState.turn) {
-        this.selectNewCell(selectedCell, index);
-        this.gameState.selectedCharacter = character;
+      if (onCellCharacter.team === this.turn) {
+        this.selectNewCell(this.selectedCell, index);
+        this.selectedCharacter = onCellCharacter;
         return;
       }
       // Персонаж может атаковать?
-      if (selectedCharacter.canAttack !== false) {
+      if (this.selectedCharacter.canAttack !== false) {
         // Он может попасть в противника?
-        if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
+        if (GameController.checkCircleRange(this.selectedCell, attackRange, index)) {
           // Атака
-          (async () => {
-            try {
-              const attackValue = selectedCharacter.character.attack;
-              const targetDefence = character.character.defence;
-              const attackResult = Math.max(attackValue - targetDefence, attackValue * 0.1);
-              await this.gamePlay.showDamage(index, attackResult);
-              character.character.health -= attackResult;
-              if (character.character.health <= 0) {
-                this.removeCharacterFromTeam(character);
-              }
-            } finally {
-              this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
-            }
-          })();
+          this.attack(this.selectedCharacter, onCellCharacter, index);
 
-          this.gameState.selectedCharacter.canAttack = false;
+          this.selectedCharacter.canAttack = false;
           this.checkTurns();
-          this.characterIsActive(selectedCharacter);
+          this.characterIsActive(this.selectedCharacter);
           return;
         }
         GamePlay.showError('Не попал - цель слишком далеко');
-        this.gameState.selectedCharacter.canAttack = false;
-        this.characterIsActive(selectedCharacter);
+        this.selectedCharacter.canAttack = false;
+        this.characterIsActive(this.selectedCharacter);
       }
     }
     this.checkTurns();
@@ -129,9 +114,6 @@ export default class GameController {
 
   onCellEnter(index) {
     const character = GameController.findCharacterOnCell(this.playerTeam, this.computerTeam, index);
-    const { selectedCharacter } = this.gameState;
-    const { selectedCell } = this.gameState;
-    const { tolltipCell } = this.gameState;
     this.gamePlay.setCursor(cursors.auto);
 
     // Отображение информации о персонаже
@@ -141,26 +123,26 @@ export default class GameController {
     }
 
     // Если есть выбранный персонаж
-    if (selectedCharacter !== undefined && selectedCharacter !== null) {
-      const { walkDistance } = selectedCharacter.character;
-      const { attackRange } = selectedCharacter.character;
+    if (this.selectedCharacter !== null) {
+      const { walkDistance } = this.selectedCharacter.character;
+      const { attackRange } = this.selectedCharacter.character;
 
       // Клетка пустая
       if (character === null) {
         // Подсветка допустимых для перехода клеток
-        if (selectedCharacter.canWalk !== false) {
+        if (this.selectedCharacter.canWalk !== false) {
         // Проверка максимальной дальности передвижения
-          if (GameController.checkCircleRange(selectedCell, walkDistance, index)) {
+          if (GameController.checkCircleRange(this.selectedCell, walkDistance, index)) {
           // Проверка по линиям
-            if (GameController.checkWalkRange(selectedCell, walkDistance, index)) {
-              this.selectNewCell(tolltipCell, index, 'green');
+            if (GameController.checkWalkRange(this.selectedCell, walkDistance, index)) {
+              this.selectNewCell(this.tolltipCell, index, 'green');
             } else {
               this.gamePlay.setCursor(cursors.notallowed);
-              this.gamePlay.deselectCell(tolltipCell);
+              this.gamePlay.deselectCell(this.tolltipCell);
             }
           } else {
             this.gamePlay.setCursor(cursors.notallowed);
-            this.gamePlay.deselectCell(tolltipCell);
+            this.gamePlay.deselectCell(this.tolltipCell);
           }
           return;
         }
@@ -170,17 +152,17 @@ export default class GameController {
       // Клетка не пустая
       if (character !== null) {
         // Персонажи в одной команде
-        if (character.team === this.gameState.turn) {
+        if (character.team === this.turn) {
           this.gamePlay.setCursor(cursors.pointer);
           return;
         }
         // Персонаж противника
-        if (character.team !== this.gameState.turn) {
-          if (selectedCharacter.canAttack !== false) {
-            if (GameController.checkCircleRange(selectedCell, attackRange, index)) {
+        if (character.team !== this.turn) {
+          if (this.selectedCharacter.canAttack !== false) {
+            if (GameController.checkCircleRange(this.selectedCell, attackRange, index)) {
               this.gamePlay.setCursor(cursors.crosshair);
-              this.selectNewCell(selectedCell, index, 'red');
-              this.gamePlay.deselectCell(tolltipCell);
+              this.selectNewCell(this.selectedCell, index, 'red');
+              this.gamePlay.deselectCell(this.tolltipCell);
               return;
             }
           }
@@ -200,43 +182,109 @@ export default class GameController {
     }
     if (color !== undefined) {
       this.gamePlay.selectCell(index, color);
-      this.gameState.tolltipCell = index;
+      this.tolltipCell = index;
       return;
     }
     this.gamePlay.selectCell(index);
-    this.gameState.selectedCell = index;
+    this.selectedCell = index;
   }
 
+  /**
+   * Returns false if character can walk or attack.
+   * Removes selection from character if character can't walk and attack
+   *
+   * @param char
+   */
   characterIsActive(char) {
     if (char.canAttack === false && char.canWalk === false) {
-      this.gameState.selectedCharacter = null;
+      this.selectedCharacter = null;
       return false;
     }
     return true;
   }
 
+  attack(attacker, target, attackIndex) {
+    (async () => {
+      try {
+        const attacked = target;
+        const attackValue = attacker.character.attack;
+        const targetDefence = attacked.character.defence;
+        const attackResult = Math.max(attackValue - targetDefence, attackValue * 0.1);
+        await this.gamePlay.showDamage(attackIndex, attackResult);
+        attacked.character.health -= attackResult;
+        if (attacked.character.health <= 0) {
+          console.log(attacked.character.health);
+
+          this.removeCharacterFromTeam(attacked);
+        }
+      } finally {
+        this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+      }
+    })();
+  }
+
   checkTurns() {
-    if (this.playerTeam.members.every((char) => char.canAttack === false)
-      && this.playerTeam.members.every((char) => char.canWalk === false)) {
-      this.gameState.turn = this.computerTeam.type;
-      this.playerTeam.members.forEach((item) => item.canAttack = true);
-      this.playerTeam.members.forEach((item) => item.canWalk = true);
+    // Каждый персонаж команды игрока ходил и атаковал
+    const playerTeam = this.playerTeam.members;
+    if (playerTeam.every((char) => char.canAttack === false) && playerTeam.every((char) => char.canWalk === false)) {
+      this.turn = this.computerTeam.type;
+      playerTeam.forEach((item) => {
+        const teamMember = item;
+        teamMember.canAttack = true;
+        teamMember.canWalk = true;
+      });
       alert('Ход второй команды');
+    }
+
+    // Если идет игра против компьютера
+    if (this.singlePlayer === true && this.turn === this.computerTeam.type) {
+      console.log('computerResponse');
+      this.computerResponse();
       return;
     }
 
-    if (this.computerTeam.members.every((char) => char.canAttack === false)
-      && this.computerTeam.members.every((char) => char.canWalk === false)) {
-      this.gameState.turn = this.playerTeam.type;
-      this.computerTeam.members.forEach((item) => item.canAttack = true);
-      this.computerTeam.members.forEach((item) => item.canWalk = true);
+    // Каждый персонаж второй команды ходил и атаковал
+    const computerTeam = this.computerTeam.members;
+    if (computerTeam.every((char) => char.canAttack === false) && computerTeam.every((char) => char.canWalk === false)) {
+      this.turn = this.playerTeam.type;
+      computerTeam.forEach((item) => {
+        const teamMember = item;
+        teamMember.canAttack = true;
+        teamMember.canWalk = true;
+      });
       alert('Ходит игрок');
     }
   }
 
+  computerResponse() {
+    const playerTeam = this.playerTeam.members;
+    const computerTeam = this.computerTeam.members;
+    const playerTeamPositions = new Array(playerTeam.length).fill(0).map((item, i) => playerTeam[i].position);
+    computerTeam.forEach((char) => {
+      console.log(char);
+      
+      const { position } = char;
+      const { attackRange } = char.character;
+      playerTeamPositions.forEach((pos, i) => {
+        const targetPosition = pos;
+        if (GameController.checkCircleRange(position, attackRange, targetPosition)) {
+          console.log(GameController.checkCircleRange(char, char.character.attackRange, pos));
+          console.log(playerTeam[i]);
+
+          this.attack(char, playerTeam[i], pos);
+        }
+      });
+    });
+  }
+
   removeCharacterFromTeam(obj) {
-    const removeIndex = this.computerTeam.members.indexOf(obj);
-    this.computerTeam.members.splice(removeIndex, 1);
+    if (this.turn === 'Player') {
+      const removeIndex = this.computerTeam.members.indexOf(obj);
+      this.computerTeam.members.splice(removeIndex, 1);
+    } else {
+      const removeIndex = this.playerTeam.members.indexOf(obj);
+      this.playerTeam.members.splice(removeIndex, 1);
+    }
   }
 
   static getTooltipString(obj) {
@@ -277,6 +325,13 @@ export default class GameController {
     return resultArr.includes(index);
   }
 
+  /**
+   * Returns true if character can attack target cell.
+   *
+   * @param selected - selected character position
+   * @param allowedDistance - max distance of characters attack.
+   * @param int - index of cell that need to be checked
+   */
   static checkCircleRange(selected, allowedDistance, int) {
     const testArray = [8, 16, 24, 32, 40, 48, 56, 64];
     const lineIndex = testArray.findIndex((item) => item > int);
