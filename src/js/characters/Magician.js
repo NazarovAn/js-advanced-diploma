@@ -7,5 +7,6 @@ export default class Magician extends Character {
     this.defence = 40;
     this.walkDistance = 1;
     this.attackRange = 4;
+    this.team = 'Player';
   }
 }

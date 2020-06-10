@@ -7,5 +7,6 @@ export default class Undead extends Character {
     this.defence = 25;
     this.walkDistance = 2;
     this.attackRange = 2;
+    this.team = 'Computer';
   }
 }

@@ -10,8 +10,10 @@ export class PositionedCharacter {
       throw new Error('position must be a number');
     }
 
-    this.character = character;
+    this.characteristics = character;
     this.position = position;
+    this.canWalk = true;
+    this.canAttack = true;
   }
 }
 
@@ -20,10 +22,10 @@ export function getPositionedCharacters(teamA, teamB) {
   const charactersB = teamB.members;
   const result = [];
   charactersA.forEach((item) => {
-    result.push(new PositionedCharacter(item.character, item.position));
+    result.push(new PositionedCharacter(item.characteristics, item.position));
   });
   charactersB.forEach((item) => {
-    result.push(new PositionedCharacter(item.character, item.position));
+    result.push(new PositionedCharacter(item.characteristics, item.position));
   });
   return result;
 }
