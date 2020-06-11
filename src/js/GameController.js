@@ -3,6 +3,7 @@ import Team from './Team';
 import { getPositionedCharacters } from './PositionedCharacter';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
+import { getRandomInt } from './generators';
 
 export default class GameController {
   constructor(gamePlay, stateService) {
@@ -26,6 +27,20 @@ export default class GameController {
   }
 
   onCellClick(index) {
+    console.log(
+      this.playerTeam.members,
+      '\n',
+      this.computerTeam.members,
+      '\nturn',
+      this.turn,
+      '\ntargetCellCharacter',
+      this.targetCellCharacter,
+      '\nselectedCharacter',
+      this.selectedCharacter,
+      '\nselectedCharacterCell',
+      this.selectedCharacterCell,
+    );
+
     const characterOnCell = this.findCharacterOnCell(index);
 
     if (this.selectedCharacter === null) {
@@ -50,6 +65,7 @@ export default class GameController {
     if (characterOnCell === null) {
       if (!this.selectedCharacter.canWalk) {
         GamePlay.showMessage('Персонаж сможет ходить на следующем ходу');
+        this.characterIsActive(this.selectedCharacter);
         return;
       }
 
@@ -60,6 +76,11 @@ export default class GameController {
         this.selectedCharacter.canWalk = false;
         this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
         this.tooltipCell = null;
+        this.characterIsActive(this.selectedCharacter);
+
+        if (this.selectedCharacter === null) {
+          return;
+        }
 
         if (!this.canAttackSomeone(this.selectedCharacter)) {
           GamePlay.showMessage('Противник далеко, персонаж сможет атаковать на следующем ходу');
@@ -68,7 +89,6 @@ export default class GameController {
           this.checkTurns();
         }
       }
-
       return;
     }
 
@@ -154,6 +174,7 @@ export default class GameController {
   }
 
   onCellLeave(index) {
+    this.gamePlay.setCursor(cursors.auto);
     this.gamePlay.hideCellTooltip(index);
 
     if (this.tooltipCell !== null) {
@@ -163,18 +184,31 @@ export default class GameController {
   }
 
   /**
-   * Returns true if any computer character is in attack range.
+   * Returns true if any character is in attack range.
    *
    * @param character
    */
   canAttackSomeone(character) {
     const computerTeamPositions = this.findAllCaractersPositions(this.computerTeam.type);
-    const result = computerTeamPositions.filter((position) => {
-      if (GameController.checkAttackRange(character, position)) {
-        return character.position;
-      }
-      return false;
-    });
+    const playerTeamPositions = this.findAllCaractersPositions(this.playerTeam.type);
+    let result;
+
+    if (character.characteristics.team === this.playerTeam.type) {
+      result = computerTeamPositions.filter((position) => {
+        if (GameController.checkAttackRange(character, position)) {
+          return character.position;
+        }
+        return false;
+      });
+    } else {
+      result = playerTeamPositions.filter((position) => {
+        if (GameController.checkAttackRange(character, position)) {
+          return character.position;
+        }
+        return false;
+      });
+    }
+
 
     if (result.length >= 1) {
       return true;
@@ -218,6 +252,9 @@ export default class GameController {
     if (char.canAttack !== false || char.canWalk !== false) {
       return true;
     }
+    if (this.selectedCharacter === null) {
+      return false;
+    }
     this.gamePlay.deselectCell(this.selectedCharacter.position);
     this.selectedCharacter = null;
     this.selectedCharacterCell = null;
@@ -240,7 +277,11 @@ export default class GameController {
         const targetDefence = attacked.characteristics.defence;
         const attackResult = Math.max(attackValue - targetDefence, attackValue * 0.1);
         await this.gamePlay.showDamage(attackIndex, attackResult);
+
+        console.log(attacked.characteristics.health);
         attacked.characteristics.health -= attackResult;
+        console.log(attacked.characteristics.health);
+        
         if (attacked.characteristics.health <= 0) {
           this.removeCharacterFromTeam(attacked);
         }
@@ -248,6 +289,8 @@ export default class GameController {
         const aggressor = attacker;
         aggressor.canAttack = false;
         this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+        this.characterIsActive(aggressor);
+        this.checkTurns();
       }
     })();
   }
@@ -264,169 +307,84 @@ export default class GameController {
       GamePlay.showMessage('Ход второй команды');
     }
 
+    const computerTeam = this.computerTeam.members;
     if (this.turn !== 'Player') {
       this.computerResponse();
+      this.turn = this.playerTeam.type;
+      computerTeam.forEach((item) => {
+        const teamMember = item;
+        teamMember.canAttack = true;
+        teamMember.canWalk = true;
+      });
     }
   }
 
   async computerResponse() {
     const computerTeam = this.computerTeam.members;
     for (let i = 0; i < computerTeam.length; i += 1) {
-      this.computerTeamAttack(computerTeam[i]);
+      const character = computerTeam[i];
+      if (character.canAttack) {
+        this.computerTeamAttack(computerTeam[i]);
+      }
       // eslint-disable-next-line no-await-in-loop
       await GameController.waitForComputer(500);
     }
 
     for (let i = 0; i < computerTeam.length; i += 1) {
-      this.computerTeamWalk(computerTeam[i]);
+      const character = computerTeam[i];
+      if (character.canWalk) {
+        this.computerTeamWalk(computerTeam[i]);
+      }
       // eslint-disable-next-line no-await-in-loop
       await GameController.waitForComputer(500);
     }
 
-    this.turn = 'Player';
-    this.checkTurns();
+    for (let i = 0; i < computerTeam.length; i += 1) {
+      this.computerTeamAttack(computerTeam[i]);
+      // eslint-disable-next-line no-await-in-loop
+      await GameController.waitForComputer(500);
+    }
+
+    // this.checkTurns();
   }
 
   static waitForComputer(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // computerTeamWalk(character) {
-  //   const walker = character;
-  //   const targetsArr = this.playerTeam.members;
-  //   const { walkDistance } = walker.characteristics;
-  //   const { attackRange } = walker.characteristics;
-  //   const maxDistance = walkDistance + attackRange;
+  computerTeamWalk(character) {
+    console.log('Walk');
 
-  //   // Если можно сходить и атаковать
-  //   const inReachArr = targetsArr.filter((member) => {
-  //     if (GameController.checkAttackRange( ... , member.position)) { // персонаж в checkAttackRange
-  //       return member;
-  //     }
-  //     return false;
-  //   });
+    if (character.canWalk === false) {
+      return;
+    }
 
-  //   console.log(inReachArr);
-
-  //   // Есть ли персонажи вне досягаемости
-  //   const outOfReachArr = targetsArr.filter((member) => {
-  //     if (!GameController.checkAttackRange( ... , member.position)) {// персонаж в checkAttackRange
-  //       return member;
-  //     }
-  //     return false;
-  //   });
-
-  //   // Больше одного вне досягаемости
-  //   if (outOfReachArr.length > 1) {
-  //     outOfReachArr.forEach((member) => {
-  //       const playerCharacter = member;
-  //       const playerCharacterPos = playerCharacter.position;
-  //       const xPosPlayer = playerCharacterPos % 8;
-  //       const yPosPlayer = Math.floor(playerCharacterPos / 8);
-  //       playerCharacter.xPos = xPosPlayer;
-  //       playerCharacter.yPos = yPosPlayer;
-
-  //       const walkerPos = walker.position;
-  //       const xPosWalker = walkerPos % 8;
-  //       const yPosWalker = Math.floor(walkerPos / 8);
-  //       walker.xPos = xPosWalker;
-  //       walker.yPos = yPosWalker;
-
-  //       // находим наименьшее расстояние между ходящим и целью вне досягаемости по осям x y
-  //       let closestX = 0;
-  //       if (xPosPlayer > xPosWalker) {
-  //         closestX = xPosPlayer - xPosWalker;
-  //       } else {
-  //         closestX = xPosWalker - xPosPlayer;
-  //       }
-
-  //       let closestY = 0;
-  //       if (yPosPlayer > yPosWalker) {
-  //         closestY = yPosPlayer - yPosWalker;
-  //       } else {
-  //         closestY = yPosWalker - yPosPlayer;
-  //       }
-
-  //       // Чем меньше индекс, тем меньше расстояние до цели.
-  //       playerCharacter.closeIndex = closestX + closestY;
-  //       playerCharacter.closestX = closestX;
-  //       playerCharacter.closestY = closestY;
-
-  //       // Если ходящий и цель в одной колонне/ряду, учесть это.
-  //       if (yPosPlayer === yPosWalker) {
-  //         playerCharacter.sameRow = true;
-  //       }
-
-  //       if (xPosPlayer === xPosWalker) {
-  //         playerCharacter.sameColumn = true;
-  //       }
-  //     });
-
-  //     let closestTarget;
-  //     const closestTargetsArr = [];
-
-  //     // Если персонаж в одном ряду/колонне выбирать их.
-  //     outOfReachArr.forEach((char) => {
-  //       if (char.sameColumn || char.sameRow) {
-  //         closestTargetsArr.push(char);
-  //       }
-  //     });
-
-  //     // из списка выбрать ближайшего.
-  //     if (closestTargetsArr.length > 1) {
-  //       closestTarget = closestTargetsArr.reduce((a, b) => (a.closeIndex < b.closeIndex ? a : b));
-  //     } if (closestTargetsArr.length === 1) {
-  //       [closestTarget] = closestTargetsArr;
-  //     } if (closestTargetsArr.length === 0) {
-  //       closestTarget = outOfReachArr.reduce((a, b) => ((a.closeIndex < b.closeIndex) ? a : b), 0);
-  //     }
-
-  //     // Ближайший персонаж вне досягаемости найден, двигаться к нему.
-  //     if (closestTarget.sameRow) {
-  //       this.changeComputerPositions(walker, walkDistance);
-  //     } if (closestTarget.sameColumn) {
-  //       this.changeComputerPositions(walker, (walkDistance * 8));
-  //     } if (closestTarget.closestX > closestTarget.closestY) {
-  //       this.changeComputerPositions(walker, walkDistance);
-  //     } if (closestTarget.closestX < closestTarget.closestY) {
-  //       this.changeComputerPositions(walker, (walkDistance * 8));
-  //     }
-
-  //     walker.canWalk = false;
-  //     walker.canAttack = false;
-  //     this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
-
-  //     targetsArr.forEach((member) => {
-  //       const char = member;
-  //       delete char.sameColumn;
-  //       delete char.sameRow;
-  //       delete char.closestX;
-  //       delete char.closestY;
-  //       delete char.xPos;
-  //       delete char.yPos;
-  //     });
-
-  //     delete walker.yPos;
-  //     delete walker.xPos;
-  //   }
-  // }
-
-  /**
-   * Changes positions of computer characters.
-   * If terget cell occupied stays in place.
-   *
-   * @param character
-   * @param distance - walking distance.
-   */
-  changeComputerPositions(character, distance) {
-    const currentPositionsArr = this.findAllCaractersPositions(null);
     const walker = character;
-    const newWalkerPosition = walker.position - distance;
-    if (currentPositionsArr.includes(newWalkerPosition)) {
-      walker.canWalk = false;
-    } else {
+    const targetsArr = this.playerTeam.members;
+    const { walkDistance } = walker.characteristics;
+    const { attackRange } = walker.characteristics;
+    const maxDistance = walkDistance + attackRange;
+    const availableForWalkArr = GameController.checkWalkRange(walker, null, true);
+
+    // Если персонаж может изменить позицию, а потом атаковать
+    const inReachArr = targetsArr.filter((member) => GameController.checkAttackRange(walker, member.position, maxDistance));
+
+    const positionsForAttack = [];
+    inReachArr.forEach((member) => {
+      availableForWalkArr.forEach((position) => {
+        const mock = { characteristics: walker.characteristics, position };
+        if (GameController.checkAttackRange(mock, member.position)) {
+          positionsForAttack.push(position);
+        }
+      });
+    });
+
+    const newWalkerPosition = positionsForAttack.filter((position) => this.findCharacterOnCell(position) === null)[getRandomInt(positionsForAttack.length - 1, 0)];
+    if (newWalkerPosition !== undefined) {
       walker.position = newWalkerPosition;
     }
+
+    this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
   }
 
   /**
@@ -435,6 +393,8 @@ export default class GameController {
    * @param  attacker
    */
   computerTeamAttack(attacker) {
+    console.log('Attack');
+
     const aggressor = attacker;
     const targetsArr = this.playerTeam.members.filter((member) => {
       if (GameController.checkAttackRange(aggressor, member.position)) {
@@ -446,24 +406,24 @@ export default class GameController {
     if (targetsArr.length === 1) {
       this.attack(attacker, targetsArr[0]);
       aggressor.canWalk = false;
-      return true;
+      console.log(`${aggressor.characteristics.type} attacked ${targetsArr[0].characteristics.type}`);
+      return;
     }
 
     if (targetsArr.length > 1) {
       const target = targetsArr.reduce((a, b) => ((a.characteristics.defence > b.characteristics.defence) ? a : b));
       this.attack(attacker, target);
       aggressor.canWalk = false;
-      return true;
+      console.log(`${aggressor.characteristics.type} attacked ${target.characteristics.type}`);
     }
-    return false;
   }
 
   removeCharacterFromTeam(obj) {
-    if (this.turn === 'Player') {
-      const removeIndex = this.computerTeam.members.indexOf(obj);
+    if (obj.characteristics.team === 'Player') {
+      const removeIndex = this.playerTeam.members.indexOf(obj);
       this.computerTeam.members.splice(removeIndex, 1);
     } else {
-      const removeIndex = this.playerTeam.members.indexOf(obj);
+      const removeIndex = this.computerTeam.members.indexOf(obj);
       this.playerTeam.members.splice(removeIndex, 1);
     }
   }
@@ -542,10 +502,10 @@ export default class GameController {
 
   /**
    * @param character
-   * @param index
+   * @param index - null if all available for walking positions needed
+   * @param customParam - if true returns all positions available for walking
    */
-  static checkWalkRange(character, index) {
-    // const allPositionsArr = this.findAllCaractersPositions();   // возможно поможет при проверке ходьбы компьютера для атаки
+  static checkWalkRange(character, index, customParam) {
     const walker = character;
     const walkerPosition = walker.position;
     const { walkDistance } = walker.characteristics;
@@ -588,6 +548,10 @@ export default class GameController {
         resultArr.push(bottomLeft);
       }
     }
+
+    if (customParam === true) {
+      return resultArr;
+    }
     return resultArr.includes(index);
   }
 
@@ -596,9 +560,14 @@ export default class GameController {
    *
    * @param character
    * @param index - index of cell that need to be checked
+   * @param customDistance
    */
-  static checkAttackRange(character, index) {
-    const { attackRange } = character.characteristics;
+  static checkAttackRange(character, index, customDistance) {
+    let { attackRange } = character.characteristics;
+    if (customDistance !== undefined) {
+      attackRange = customDistance;
+    }
+
     const { position } = character;
     const testArray = [8, 16, 24, 32, 40, 48, 56, 64];
     const lineIndex = testArray.findIndex((item) => item > index);
