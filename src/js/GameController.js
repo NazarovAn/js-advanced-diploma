@@ -1,5 +1,5 @@
 /* eslint-disable max-len */
-import Team from './Team';
+import Team, { getPlayerPositions } from './Team';
 import { getPositionedCharacters } from './PositionedCharacter';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
@@ -7,10 +7,12 @@ import { getRandomInt } from './generators';
 
 export default class GameController {
   constructor(gamePlay, stateService) {
+    this.level = 1;
+    this.levelFeatures = GameController.chooseLevel(this.level, 2);
     this.gamePlay = gamePlay;
     this.stateService = stateService;
-    this.playerTeam = new Team('Player', 1, 4);
-    this.computerTeam = new Team('Computer', 1, 10);
+    this.playerTeam = this.levelFeatures.playerTeam;
+    this.computerTeam = this.levelFeatures.computerTeam;
     this.turn = 'Player';
     this.targetCellCharacter = null;
     this.selectedCharacter = null;
@@ -19,14 +21,87 @@ export default class GameController {
   }
 
   init() {
-    this.gamePlay.drawUi('prairie');
+    this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
     this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
     this.gamePlay.addCellEnterListener(this.onCellEnter.bind(this));
     this.gamePlay.addCellClickListener(this.onCellClick.bind(this));
     this.gamePlay.addCellLeaveListener(this.onCellLeave.bind(this));
+    this.gamePlay.addNewGameListener(this.newGame.bind(this));
+  }
+
+  static chooseLevel(level, numberOfCharacters) {
+    const levels = {
+      1: {
+        theme: 'prairie',
+        playerTeam: new Team('Player', 1, numberOfCharacters),
+        computerTeam: new Team('Computer', 1, numberOfCharacters),
+      },
+      2: {
+        theme: 'desert',
+        playerTeam: new Team('Player', 1, 1),
+        computerTeam: new Team('Computer', 2, numberOfCharacters + 1),
+      },
+      3: {
+        theme: 'arctic',
+        playerTeam: new Team('Player', 2, 2),
+        computerTeam: new Team('Computer', 3, numberOfCharacters + 2),
+      },
+      4: {
+        theme: 'mountain',
+        playerTeam: new Team('Player', 3, 2),
+        computerTeam: new Team('Computer', 4, numberOfCharacters + 2),
+      },
+    };
+
+    return levels[level];
+  }
+
+  newGame() {
+    this.level = 1;
+    this.levelFeatures = GameController.chooseLevel(this.level, 2);
+    this.playerTeam = this.levelFeatures.playerTeam;
+    this.computerTeam = this.levelFeatures.computerTeam;
+    this.turn = 'Player';
+    this.targetCellCharacter = null;
+    this.selectedCharacter = null;
+    this.selectedCharacterCell = null;
+    this.tooltipCell = null;
+    this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
+    this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+  }
+
+  checkGameOver() {
+    if (this.playerTeam.members.length === 0) {
+      GamePlay.showMessage('GAME OVER');
+      return true;
+    }
+
+    if (this.computerTeam.members.length === 0) {
+      this.level += 1;
+      if (this.level > 4) {
+        this.level = 2;
+      }
+
+      this.levelFeatures = GameController.chooseLevel(this.level, this.playerTeam.members.length);
+      this.playerTeam.members = this.playerTeam.members.concat(this.levelFeatures.playerTeam.members);
+      this.computerTeam = this.levelFeatures.computerTeam;
+
+      const newStartingPositions = getPlayerPositions('Player', this.playerTeam.members.length);
+      this.playerTeam.members.forEach((char, index) => {
+        const character = char;
+        character.position = newStartingPositions[index];
+      });
+
+      this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
+      this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
+    }
+
+    return false;
   }
 
   onCellClick(index) {
+    this.checkGameOver();
+
     if (this.turn !== 'Player') {
       GamePlay.showMessage('Ходит компьютер');
       return;
@@ -390,7 +465,13 @@ export default class GameController {
    * Changes turns if no characters can walk or attack.
    */
   checkTurns() {
+    if (this.checkGameOver()) {
+      return;
+    }
+
     const playerTeam = this.playerTeam.members;
+    const computerTeam = this.computerTeam.members;
+
     if (playerTeam.every((char) => char.canAttack === false) && playerTeam.every((char) => char.canWalk === false)) {
       this.turn = this.computerTeam.type;
       playerTeam.forEach((item) => {
@@ -401,7 +482,6 @@ export default class GameController {
       GamePlay.showMessage('Ход второй команды');
     }
 
-    const computerTeam = this.computerTeam.members;
     if (this.turn !== 'Player') {
       this.computerResponse();
       computerTeam.forEach((item) => {

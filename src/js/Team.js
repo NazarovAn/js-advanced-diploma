@@ -19,7 +19,7 @@ const computerCharactersTypes = new Set([
   Vampire,
 ]);
 
-function getPlayerPositions(team, membersCount) {
+export function getPlayerPositions(team, membersCount) {
   const intArray = [];
   const resultSet = new Set();
   let allowedLineA = 0;

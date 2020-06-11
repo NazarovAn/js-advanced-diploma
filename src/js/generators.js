@@ -19,7 +19,7 @@ export function generateTeam(allowedTypes, maxLevel, characterCount) {
   const typesArr = Array.from(allowedTypes);
   const teamArr = [];
   for (let i = 0; i < characterCount; i += 1) {
-    teamArr.push(characterGenerator(typesArr[getRandomInt(2, 0)], getRandomInt(maxLevel, 0)));
+    teamArr.push(characterGenerator(typesArr[getRandomInt(2, 0)], getRandomInt(maxLevel, 1)));
   }
   return teamArr;
 }
