@@ -9,8 +9,8 @@ export default class GameController {
   constructor(gamePlay, stateService) {
     this.gamePlay = gamePlay;
     this.stateService = stateService;
-    this.playerTeam = new Team('Player', 1, 2);
-    this.computerTeam = new Team('Computer', 1, 2);
+    this.playerTeam = new Team('Player', 1, 4);
+    this.computerTeam = new Team('Computer', 1, 10);
     this.turn = 'Player';
     this.targetCellCharacter = null;
     this.selectedCharacter = null;
@@ -27,6 +27,11 @@ export default class GameController {
   }
 
   onCellClick(index) {
+    if (this.turn !== 'Player') {
+      GamePlay.showMessage('Ходит компьютер');
+      return;
+    }
+
     const characterOnCell = this.findCharacterOnCell(index);
 
     if (this.selectedCharacter === null) {
@@ -63,6 +68,7 @@ export default class GameController {
         this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
         this.tooltipCell = null;
         this.characterIsActive(this.selectedCharacter);
+        this.checkTurns();
 
         if (this.selectedCharacter === null) {
           return;
@@ -398,7 +404,6 @@ export default class GameController {
     const computerTeam = this.computerTeam.members;
     if (this.turn !== 'Player') {
       this.computerResponse();
-      this.turn = this.playerTeam.type;
       computerTeam.forEach((item) => {
         const teamMember = item;
         teamMember.canAttack = true;
@@ -409,18 +414,33 @@ export default class GameController {
 
   // Утилитарные методы
 
+  static getTooltipString(obj) {
+    const icons = {
+      attack: '\u2694',
+      defence: '\uD83D\uDEE1',
+      health: '\u2764',
+      level: '\uD83C\uDF96',
+    };
+    const {
+      attack, defence, health, level,
+    } = obj.characteristics;
+    return `${icons.level}${level} ${icons.attack}${attack} ${icons.defence}${defence} ${icons.health}${health}`;
+  }
+
   /**
    * Removes character from team.
    *
    * @param obj - character to remove
    */
   removeCharacterFromTeam(obj) {
-    if (obj.characteristics.team === 'Player') {
-      const removeIndex = this.playerTeam.members.indexOf(obj);
-      this.computerTeam.members.splice(removeIndex, 1);
-    } else {
-      const removeIndex = this.computerTeam.members.indexOf(obj);
+    const character = obj;
+    if (this.playerTeam.members.includes(character)) {
+      const removeIndex = this.playerTeam.members.indexOf(character);
       this.playerTeam.members.splice(removeIndex, 1);
+    }
+    if (this.computerTeam.members.includes(character)) {
+      const removeIndex = this.computerTeam.members.indexOf(character);
+      this.computerTeam.members.splice(removeIndex, 1);
     }
   }
 
@@ -459,12 +479,12 @@ export default class GameController {
         const attackValue = attacker.characteristics.attack;
         const targetDefence = attacked.characteristics.defence;
         const attackResult = Math.max(attackValue - targetDefence, attackValue * 0.1);
-        await this.gamePlay.showDamage(attackIndex, attackResult);
         attacked.characteristics.health -= attackResult;
-
         if (attacked.characteristics.health <= 0) {
           this.removeCharacterFromTeam(attacked);
         }
+
+        await this.gamePlay.showDamage(attackIndex, attackResult);
       } finally {
         const aggressor = attacker;
         aggressor.canAttack = false;
@@ -479,32 +499,20 @@ export default class GameController {
 
   async computerResponse() {
     const computerTeam = this.computerTeam.members;
+
     for (let i = 0; i < computerTeam.length; i += 1) {
-      const character = computerTeam[i];
-      if (character.canAttack) {
-        this.computerTeamAttack(computerTeam[i]);
-      }
+      this.computerTeamWalk(computerTeam[i]);
       // eslint-disable-next-line no-await-in-loop
       await GameController.waitForComputer(500);
     }
 
     for (let i = 0; i < computerTeam.length; i += 1) {
-      const character = computerTeam[i];
-      if (character.canWalk) {
-        this.computerTeamWalk(computerTeam[i]);
-      }
+      this.computerTeamAttack(computerTeam[i]);
       // eslint-disable-next-line no-await-in-loop
       await GameController.waitForComputer(500);
     }
 
-    for (let i = 0; i < computerTeam.length; i += 1) {
-      const character = computerTeam[i];
-      if (character.canAttack) {
-        this.computerTeamAttack(computerTeam[i]);
-      }
-      // eslint-disable-next-line no-await-in-loop
-      await GameController.waitForComputer(500);
-    }
+    this.turn = this.playerTeam.type;
   }
 
   /**
@@ -517,45 +525,26 @@ export default class GameController {
   }
 
   computerTeamWalk(character) {
-    if (character.canWalk === false) {
-      return;
-    }
-
     const walker = character;
-    const targetsArr = this.playerTeam.members;
-    const { walkDistance } = walker.characteristics;
-    const { attackRange } = walker.characteristics;
-    const maxDistance = walkDistance + attackRange;
-    const availableForWalkArr = GameController.checkWalkRange(walker, null, true);
-
-    // Если персонаж может изменить позицию, а потом атаковать
-    const inReachArr = targetsArr.filter((member) => GameController.checkAttackRange(walker, member.position, maxDistance));
-    if (inReachArr.length > 0) {
-      const positionsForAttack = [];
-      inReachArr.forEach((member) => {
-        availableForWalkArr.forEach((position) => {
-          const mock = { characteristics: walker.characteristics, position };
-          if (GameController.checkAttackRange(mock, member.position)) {
-            positionsForAttack.push(position);
-          }
-        });
-      });
-
-      const newWalkerPosition = positionsForAttack.filter((position) => this.findCharacterOnCell(position) === null)[getRandomInt(positionsForAttack.length - 1, 0)];
-      if (newWalkerPosition !== undefined) {
-        walker.position = newWalkerPosition;
-      }
-      this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
-      this.checkTurns();
+    if (walker.canWalk === false) {
+      return;
+    }
+    if (this.canAttackSomeone(walker)) {
+      walker.canWalk = false;
       return;
     }
 
-    const newPosition = availableForWalkArr[getRandomInt(availableForWalkArr.length - 1, 0)];
-    walker.position = newPosition;
-    walker.canAttack = false;
+    const availableForWalkArr = GameController.checkWalkRange(walker, null, true);
+    const allCharactersPositions = this.findAllCaractersPositions();
+    const filteredForWalkArr = availableForWalkArr.filter((item) => !allCharactersPositions.includes(item));
+
+    if (filteredForWalkArr.length === 0) {
+      console.log('no places to walk');
+      return;
+    }
+    walker.position = filteredForWalkArr[getRandomInt(filteredForWalkArr.length - 1, 0)];
     walker.canWalk = false;
     this.gamePlay.redrawPositions(getPositionedCharacters(this.playerTeam, this.computerTeam));
-    this.checkTurns();
   }
 
   /**
@@ -573,30 +562,12 @@ export default class GameController {
     });
 
     if (targetsArr.length === 0) {
-      return;
-    }
-
-    if (targetsArr.length === 1) {
-      this.attack(attacker, targetsArr[0]);
-      aggressor.canWalk = false;
+      console.log('targets too far');
       return;
     }
 
     const target = targetsArr.reduce((a, b) => ((a.characteristics.defence > b.characteristics.defence) ? a : b));
-    this.attack(attacker, target);
+    this.attack(aggressor, target);
     aggressor.canWalk = false;
-  }
-
-  static getTooltipString(obj) {
-    const icons = {
-      attack: '\u2694',
-      defence: '\uD83D\uDEE1',
-      health: '\u2764',
-      level: '\uD83C\uDF96',
-    };
-    const {
-      attack, defence, health, level,
-    } = obj.characteristics;
-    return `${icons.level}${level} ${icons.attack}${attack} ${icons.defence}${defence} ${icons.health}${health}`;
   }
 }
