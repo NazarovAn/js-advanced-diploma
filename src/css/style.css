@@ -252,3 +252,21 @@ body {
     font-size: 1.5rem;
   }
 }
+
+#game-events {
+  max-width: 600px;
+  min-height: 60px;
+  max-height: 60px;
+  background-color: white;
+  margin: auto;
+  border-radius: 20px;
+  margin-top: 40px;
+  border: #bfcfe2 4px solid;
+  padding: 10px;
+  text-align: center;
+}
+
+.message {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 25px; 
+}

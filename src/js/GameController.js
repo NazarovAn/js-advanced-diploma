@@ -3,6 +3,7 @@ import Team, { getPlayerPositions } from './Team';
 import { getRandomInt } from './generators';
 import GamePlay from './GamePlay';
 import cursors from './cursors';
+import EventsWidget from './Game-events';
 
 export default class GameController {
   constructor(gamePlay, stateService) {
@@ -18,6 +19,7 @@ export default class GameController {
     this.selectedCharacterCell = null;
     this.tooltipCell = null;
     this.points = 0;
+    this.eventsWidget = new EventsWidget();
   }
 
   init() {
@@ -97,7 +99,8 @@ export default class GameController {
 
   checkGameOver() {
     if (this.playerTeam.members.length === 0) {
-      GamePlay.showMessage(`   GAME OVER\n\nНабранные очки - ${this.points}`);
+      GamePlay.showMessage(`      GAME OVER\n\n Набранные очки - ${this.points}`);
+      this.eventsWidget.newGame(() => this.newGame());
       return true;
     }
 
@@ -150,7 +153,7 @@ export default class GameController {
     this.checkTurns();
 
     if (this.turn !== 'Player') {
-      GamePlay.showMessage('Ходит компьютер');
+      this.eventsWidget.insertMessage('Ходит компьютер');
       return;
     }
 
@@ -159,13 +162,13 @@ export default class GameController {
     if (this.selectedCharacter === null) {
       if (characterOnCell !== null) {
         if (characterOnCell.characteristics.team !== this.turn) {
-          GamePlay.showMessage(`Ход команды ${this.turn}`);
+          this.eventsWidget.insertMessage(`Ход команды ${this.turn}`);
           this.checkTurns();
           return;
         }
 
         if (!this.characterIsActive(characterOnCell)) {
-          GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
+          this.eventsWidget.insertMessage('Персонаж будет доступен на следующем ходу');
           this.checkTurns();
           return;
         }
@@ -180,7 +183,7 @@ export default class GameController {
 
     if (characterOnCell === null) {
       if (!this.selectedCharacter.canWalk) {
-        GamePlay.showMessage('Персонаж сможет ходить на следующем ходу');
+        this.eventsWidget.insertMessage('Персонаж сможет ходить на следующем ходу');
         this.characterIsActive(this.selectedCharacter);
         this.checkTurns();
         return;
@@ -201,7 +204,7 @@ export default class GameController {
         }
 
         if (!this.canAttackSomeone(this.selectedCharacter)) {
-          GamePlay.showMessage('Противник далеко, персонаж сможет атаковать на следующем ходу');
+          this.eventsWidget.insertMessage('Противник далеко, персонаж сможет атаковать на следующем ходу');
           this.selectedCharacter.canAttack = false;
           this.characterIsActive(this.selectedCharacter);
           this.checkTurns();
@@ -214,7 +217,7 @@ export default class GameController {
 
     if (this.selectedCharacter.characteristics.team === characterOnCell.characteristics.team) {
       if (!this.characterIsActive(characterOnCell)) {
-        GamePlay.showMessage('Персонаж будет доступен на следующем ходу');
+        this.eventsWidget.insertMessage('Персонаж будет доступен на следующем ходу');
         return;
       }
 
@@ -233,13 +236,13 @@ export default class GameController {
     }
 
     if (!this.selectedCharacter.canAttack) {
-      GamePlay.showMessage('Персонаж сможет атаковать на следующем ходу');
+      this.eventsWidget.insertMessage('Персонаж сможет атаковать на следующем ходу');
       this.checkTurns();
       return;
     }
 
     if (!GameController.checkAttackRange(this.selectedCharacter, index)) {
-      GamePlay.showMessage('Цель слишком далеко');
+      this.eventsWidget.insertMessage('Цель слишком далеко');
       this.selectedCharacter.canAttack = false;
       this.checkTurns();
       return;
@@ -543,7 +546,7 @@ export default class GameController {
         teamMember.canAttack = true;
         teamMember.canWalk = true;
       });
-      GamePlay.showMessage('Ход второй команды');
+      this.eventsWidget.insertMessage('Ход второй команды');
     }
 
     if (this.turn !== 'Player') {
@@ -660,7 +663,7 @@ export default class GameController {
     }
 
     this.turn = this.playerTeam.type;
-    GamePlay.showMessage('Ход игрока');
+    this.eventsWidget.insertMessage('Ход игрока');
   }
 
   /**
