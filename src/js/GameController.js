@@ -20,6 +20,8 @@ export default class GameController {
     this.tooltipCell = null;
     this.points = 0;
     this.eventsWidget = new EventsWidget();
+    this.gameOver = false;
+    this.blockActions = false;
   }
 
   init() {
@@ -95,12 +97,17 @@ export default class GameController {
     this.tooltipCell = null;
     this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
     this.gamePlay.redrawPositions(this.playerTeam.members.concat(this.computerTeam.members));
+    this.gameOver = false;
   }
 
   checkGameOver() {
+    if (this.gameOver) {
+      return true;
+    }
     if (this.playerTeam.members.length === 0) {
       GamePlay.showMessage(`      GAME OVER\n\n Набранные очки - ${this.points}`);
       this.eventsWidget.newGame(() => this.newGame());
+      this.gameOver = true;
       return true;
     }
 
@@ -149,7 +156,9 @@ export default class GameController {
   }
 
   onCellClick(index) {
-    this.checkGameOver();
+    if (this.checkGameOver()) {
+      return;
+    }
     this.checkTurns();
 
     if (this.turn !== 'Player') {
@@ -539,6 +548,21 @@ export default class GameController {
     const playerTeam = this.playerTeam.members;
     const computerTeam = this.computerTeam.members;
 
+    if (this.turn !== 'Player') {
+      if (this.blockActions === true) {
+        return;
+      }
+
+      this.computerResponse();
+      computerTeam.forEach((item) => {
+        const teamMember = item;
+        teamMember.canAttack = true;
+        teamMember.canWalk = true;
+      });
+      this.blockActions = true;
+      return;
+    }
+
     if (playerTeam.every((char) => char.canAttack === false) && playerTeam.every((char) => char.canWalk === false)) {
       this.turn = this.computerTeam.type;
       playerTeam.forEach((item) => {
@@ -547,15 +571,7 @@ export default class GameController {
         teamMember.canWalk = true;
       });
       this.eventsWidget.insertMessage('Ход второй команды');
-    }
-
-    if (this.turn !== 'Player') {
-      this.computerResponse();
-      computerTeam.forEach((item) => {
-        const teamMember = item;
-        teamMember.canAttack = true;
-        teamMember.canWalk = true;
-      });
+      this.blockActions = false;
     }
   }
 
@@ -664,6 +680,7 @@ export default class GameController {
 
     this.turn = this.playerTeam.type;
     this.eventsWidget.insertMessage('Ход игрока');
+    this.checkTurns();
   }
 
   /**

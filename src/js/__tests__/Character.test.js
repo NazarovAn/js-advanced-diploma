@@ -7,11 +7,12 @@ test('new Character error', () => {
 
 test('new Daemon', () => {
   expect(new Daemon(10)).toEqual({
-    attack: 10,
+    attack: 60,
     attackRange: 4,
-    defence: 40,
+    defence: 30,
     health: 50,
     level: 10,
+    team: 'Computer',
     type: 'daemon',
     walkDistance: 1,
   });

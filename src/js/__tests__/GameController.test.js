@@ -2,7 +2,7 @@ import GameController from '../GameController';
 
 describe('tagged templates', () => test.each([
   ['1', {
-    character: {
+    characteristics: {
       level: 1,
       attack: 20,
       defence: 40,
@@ -11,7 +11,7 @@ describe('tagged templates', () => test.each([
   }, '\uD83C\uDF961 \u269420 \uD83D\uDEE140 \u2764100',
   ],
   ['2', {
-    character: {
+    characteristics: {
       defence: 80,
       health: 10,
       level: 4,
