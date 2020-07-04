@@ -56,6 +56,9 @@ export default class GameController {
     this.points = gameState.points;
     this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
     this.gamePlay.redrawPositions(this.playerTeam.members.concat(this.computerTeam.members));
+    this.gameOver = false;
+    this.blockActions = false;
+    this.eventsWidget.insertMessage('');
   }
 
   static chooseLevel(level, numberOfCharacters) {
@@ -98,14 +101,17 @@ export default class GameController {
     this.gamePlay.drawUi(GameController.chooseLevel(this.level).theme);
     this.gamePlay.redrawPositions(this.playerTeam.members.concat(this.computerTeam.members));
     this.gameOver = false;
+    this.eventsWidget.insertMessage('');
   }
 
   checkGameOver() {
     if (this.gameOver) {
+      this.gamePlay.setCursor(cursors.notallowed);
       return true;
     }
+
     if (this.playerTeam.members.length === 0) {
-      GamePlay.showMessage(`      GAME OVER\n\n Набранные очки - ${this.points}`);
+      setTimeout(() => GamePlay.showMessage(`      GAME OVER\n\n Набранные очки - ${this.points}`), 1500);
       this.eventsWidget.newGame(() => this.newGame());
       this.gameOver = true;
       return true;
@@ -160,11 +166,7 @@ export default class GameController {
       return;
     }
     this.checkTurns();
-
-    if (this.turn !== 'Player') {
-      this.eventsWidget.insertMessage('Ходит компьютер');
-      return;
-    }
+    this.eventsWidget.insertMessage('');
 
     const characterOnCell = this.findCharacterOnCell(index);
 
@@ -262,6 +264,9 @@ export default class GameController {
   }
 
   onCellEnter(index) {
+    if (this.checkGameOver()) {
+      return;
+    }
     const characterOnCell = this.findCharacterOnCell(index);
     this.gamePlay.setCursor(cursors.auto);
 
@@ -307,6 +312,10 @@ export default class GameController {
   }
 
   onCellLeave(index) {
+    if (this.checkGameOver()) {
+      return;
+    }
+
     this.gamePlay.setCursor(cursors.auto);
     this.gamePlay.hideCellTooltip(index);
 
@@ -562,6 +571,7 @@ export default class GameController {
       this.blockActions = true;
       return;
     }
+    this.blockActions = false;
 
     if (playerTeam.every((char) => char.canAttack === false) && playerTeam.every((char) => char.canWalk === false)) {
       this.turn = this.computerTeam.type;
@@ -571,7 +581,7 @@ export default class GameController {
         teamMember.canWalk = true;
       });
       this.eventsWidget.insertMessage('Ход второй команды');
-      this.blockActions = false;
+      this.checkTurns();
     }
   }
 
@@ -657,6 +667,7 @@ export default class GameController {
         aggressor.canAttack = false;
         this.gamePlay.redrawPositions(this.playerTeam.members.concat(this.computerTeam.members));
         this.characterIsActive(aggressor);
+        this.checkTurns();
       }
     })();
   }
@@ -676,6 +687,10 @@ export default class GameController {
       this.computerTeamAttack(computerTeam[i]);
       // eslint-disable-next-line no-await-in-loop
       await GameController.waitForComputer(600);
+    }
+
+    if (this.checkGameOver()) {
+      return;
     }
 
     this.turn = this.playerTeam.type;
